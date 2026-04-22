@@ -1,0 +1,27 @@
+# Dependências (serão instaladas no container)
+node_modules/
+
+# Build anterior
+.next/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Env (passadas via docker-compose)
+.env
+.env.*
+
+# IDE e OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Documentação
+README.md
+AGENTS.md
+CLAUDE.md
