@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Ceres Conecta",
+    "slug": "ceres-conecta",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0f0d"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ceresconecta.operador"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0f0d"
+      },
+      "package": "com.ceresconecta.operador",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O app precisa acessar sua localização para registrar onde os serviços são realizados."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O app precisa acessar a câmera para registrar fotos dos serviços.",
+          "photosPermission": "O app precisa acessar suas fotos para anexar aos registros."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O app precisa acessar a câmera para registrar fotos dos serviços."
+        }
+      ]
+    ]
+  }
+}
