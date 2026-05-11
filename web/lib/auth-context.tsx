@@ -61,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(sess.user.id)
       }
       setLoading(false)
+    }).catch((err) => {
+      console.error("Erro ao conectar no Supabase:", err)
+      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
