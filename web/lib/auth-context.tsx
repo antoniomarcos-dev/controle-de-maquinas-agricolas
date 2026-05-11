@@ -31,42 +31,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = createClient()
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('users_profile')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    if (data) setProfile(data as UserProfile)
+    try {
+      const { data, error } = await supabase
+        .from('users_profile')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      if (error) console.error("Error fetching profile:", error)
+      if (data) setProfile(data as UserProfile)
+    } catch (err) {
+      console.error("Network error fetching profile:", err)
+    }
   }
 
   useEffect(() => {
+    let isMounted = true
+
+    // Set a fail-safe timeout: if Supabase takes more than 3 seconds, force loading to false
+    const fallbackTimeout = setTimeout(() => {
+      if (isMounted) setLoading(false)
+    }, 3000)
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, sess) => {
-        setSession(sess)
-        setUser(sess?.user ?? null)
-        if (sess?.user) {
-          await fetchProfile(sess.user.id)
-        } else {
-          setProfile(null)
+        if (!isMounted) return
+        try {
+          setSession(sess)
+          setUser(sess?.user ?? null)
+          if (sess?.user) {
+            // Do not await here so we don't block the UI rendering
+            fetchProfile(sess.user.id).catch(console.error)
+          } else {
+            setProfile(null)
+          }
+        } catch (err) {
+          console.error("Error in onAuthStateChange:", err)
+        } finally {
+          setLoading(false)
+          clearTimeout(fallbackTimeout)
         }
-        setLoading(false)
       }
     )
 
-    // Initial session check
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      if (!isMounted) return
       setSession(sess)
       setUser(sess?.user ?? null)
       if (sess?.user) {
-        fetchProfile(sess.user.id)
+        fetchProfile(sess.user.id).catch(console.error)
       }
       setLoading(false)
+      clearTimeout(fallbackTimeout)
     }).catch((err) => {
       console.error("Erro ao conectar no Supabase:", err)
-      setLoading(false)
+      if (isMounted) setLoading(false)
+      clearTimeout(fallbackTimeout)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+      clearTimeout(fallbackTimeout)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
