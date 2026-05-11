@@ -18,9 +18,8 @@ O sistema é composto por três frentes principais:
 
 ```text
 ├── mobile/               # Aplicativo React Native (Expo)
-├── web/                  # Dashboard Administrativo (Next.js)
+├── web/                  # Dashboard Administrativo (Next.js - Otimizado para Vercel)
 ├── supabase/             # Migrations e configurações do banco de dados (Supabase)
-├── docker-compose.yml    # Orquestração do Dashboard via Docker
 ├── .env.example          # Exemplo de variáveis de ambiente
 └── DOCUMENTO_TECNICO.md  # Requisitos e regras de negócio detalhadas
 ```
@@ -33,7 +32,7 @@ Siga as instruções abaixo para configurar e executar a plataforma completa, de
 
 ### Pré-requisitos
 - **Node.js** (v18+)
-- **Docker Desktop** (Obrigatório para rodar a Web via Docker)
+- **Conta na Vercel** (Para deploy do Dashboard Web)
 - **Conta no Supabase** (ou Supabase CLI para rodar localmente)
 - **Expo Go** instalado no smartphone (Android/iOS) para testar o app mobile.
 
@@ -65,33 +64,21 @@ Para preparar o banco de dados com as tabelas necessárias:
 
 ---
 
-### Passo 3: Executando o Dashboard Web (Recomendado via Docker)
+### Passo 3: Fazendo Deploy do Dashboard na Vercel
 
-O Dashboard Web consome muita memória ao ser rodado via ambiente de desenvolvimento tradicional (`npm run dev`). Para máquinas com poucos recursos, **é altamente recomendado o uso do Docker**.
+A aplicação Web foi totalmente otimizada para rodar de forma serverless e edge na infraestrutura da Vercel, suportando funcionamento offline (PWA) e Turbopack.
 
-| Modo | RAM Consumida | Descrição |
-|---|---|---|
-| **Local (npm run dev)** | 500MB — 1.5GB | Alto uso devido à compilação ao vivo. |
-| **Docker (produção)** | **80MB — 250MB** | Otimizado, pré-compilado, limite de recursos imposto. |
-
-#### Rodando com Docker (Produção Otimizada)
-1. Certifique-se de que o Docker Desktop está rodando.
-2. Na raiz do projeto, execute o comando:
-```bash
-docker compose up -d --build
-```
-3. O Docker fará o build otimizado da aplicação em modo _standalone_ limitando a memória exigida.
-4. Acesse o dashboard no seu navegador através de: **`http://localhost:3000`**
-
-**Comandos Úteis do Docker:**
-```bash
-docker compose logs -f web    # Ver logs da aplicação em tempo real
-docker stats                  # Monitorar consumo de memória/CPU
-docker compose down           # Parar e remover os containers
-```
+1. Crie uma conta na Vercel (https://vercel.com) e vincule ao seu GitHub.
+2. Suba este código para um repositório no seu GitHub.
+3. No painel da Vercel, clique em **Add New... > Project** e importe o seu repositório.
+4. Na tela de configuração de Deploy da Vercel:
+   - **Framework Preset**: O Next.js será detectado automaticamente.
+   - **Root Directory**: Clique em *Edit* e selecione a pasta `web`.
+   - **Environment Variables**: Adicione as variáveis `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` com os valores do seu Supabase.
+5. Clique em **Deploy**! A Vercel vai compilar o código em segundos e gerar o link público do seu sistema (com suporte PWA e Cache Offline embutido).
 
 #### Rodando Localmente (Apenas para Desenvolvimento)
-Caso precise modificar o código Web ativamente:
+Caso precise modificar o código Web ou testar antes do deploy:
 ```bash
 cd web
 npm install
