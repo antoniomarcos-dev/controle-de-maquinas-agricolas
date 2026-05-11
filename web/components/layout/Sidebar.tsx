@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { useConnectivity } from '@/lib/connectivity'
 import { getInitials } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -16,6 +17,8 @@ import {
   Menu,
   X,
   Tractor,
+  Wifi,
+  WifiOff,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -32,6 +35,7 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname()
   const { profile, signOut } = useAuth()
+  const { status, pendingCount } = useConnectivity()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -102,6 +106,26 @@ export default function Sidebar() {
             )
           })}
         </nav>
+
+        {/* Connectivity Status */}
+        <div style={{
+          padding: '12px 20px',
+          borderTop: '1px solid var(--color-surface-600)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          fontSize: 13,
+        }}>
+          {status === 'online' ? <Wifi size={16} color="var(--color-brand-400)" /> : status === 'syncing' ? <Wifi size={16} color="#60a5fa" /> : <WifiOff size={16} color="var(--color-danger-400)" />}
+          <span style={{ color: status === 'online' ? 'var(--color-brand-400)' : status === 'syncing' ? '#60a5fa' : 'var(--color-danger-400)', fontWeight: 500 }}>
+            {status === 'online' ? 'Online' : status === 'syncing' ? 'Sincronizando...' : 'Offline'}
+          </span>
+          {pendingCount > 0 && (
+            <span style={{ marginLeft: 'auto', background: 'rgba(234,179,8,0.2)', color: '#facc15', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+              {pendingCount}
+            </span>
+          )}
+        </div>
 
         <div className="sidebar-user">
           <div className="sidebar-user-avatar">

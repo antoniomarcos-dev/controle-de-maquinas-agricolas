@@ -1,13 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },
-  experimental: {
-    memoryBasedWorkersCount: true,
-  },
+  // Turbopack config (required by Next.js 16)
+  turbopack: {},
 };
 
 export default nextConfig;

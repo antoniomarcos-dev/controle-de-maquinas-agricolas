@@ -1,8 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
+import { useConnectivity } from '@/lib/connectivity'
+import {
+  setCacheData,
+  getCacheData,
+} from '@/lib/offline-cache'
 import {
   Users,
   Cog,
@@ -13,7 +18,7 @@ import {
   Activity,
   Truck,
 } from 'lucide-react'
-import { formatDate, formatNumber, formatMinutesToHours, getStatusClass, getStatusLabel, formatTime } from '@/lib/utils'
+import { formatDate, formatNumber, getStatusClass, getStatusLabel, formatTime } from '@/lib/utils'
 import type { ServiceOrder, Machine, Journey, UserProfile } from '@/lib/types'
 
 interface DashboardStats {
@@ -27,8 +32,14 @@ interface DashboardStats {
   totalOvertimeToday: number
 }
 
+const CACHE_KEY_STATS = 'dashboard-stats'
+const CACHE_KEY_SERVICES = 'dashboard-recent-services'
+const CACHE_KEY_ALERTS = 'dashboard-alerts'
+const CACHE_KEY_OPERATORS = 'dashboard-active-operators'
+
 export default function DashboardPage() {
   const { profile } = useAuth()
+  useConnectivity()
   const supabase = createClient()
   const [stats, setStats] = useState<DashboardStats>({
     totalOperators: 0,
@@ -44,55 +55,95 @@ export default function DashboardPage() {
   const [maintenanceAlerts, setMaintenanceAlerts] = useState<Machine[]>([])
   const [activeOperators, setActiveOperators] = useState<(Journey & { operator: UserProfile })[]>([])
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false)
+
+  const loadDashboard = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0]
+
+    // Try to load from network
+    if (navigator.onLine) {
+      try {
+        const [
+          operatorsRes,
+          machinesRes,
+          vehiclesRes,
+          journeysRes,
+          openServicesRes,
+          finishedServicesRes,
+          recentServicesRes,
+          alertsRes,
+          activeOpsRes,
+        ] = await Promise.all([
+          supabase.from('users_profile').select('id', { count: 'exact' }).eq('role', 'operator'),
+          supabase.from('machines').select('id', { count: 'exact' }),
+          supabase.from('vehicles').select('id', { count: 'exact' }),
+          supabase.from('journeys').select('id', { count: 'exact' }).eq('date', today).is('garage_return_at', null),
+          supabase.from('service_orders').select('id', { count: 'exact' }).eq('status', 'open'),
+          supabase.from('service_orders').select('id', { count: 'exact' }).eq('date', today).eq('status', 'finished'),
+          supabase.from('service_orders').select('*, operator:users_profile(*), machine:machines(*), vehicle:vehicles(*)').order('created_at', { ascending: false }).limit(8),
+          supabase.from('machines').select('*').gte('hourmeter_current', 0),
+          supabase.from('journeys').select('*, operator:users_profile(*)').eq('date', today).is('garage_return_at', null).order('garage_out_at', { ascending: false }),
+        ])
+
+        const machinesList = (alertsRes.data || []) as Machine[]
+        const alertMachines = machinesList.filter(m => m.hourmeter_current >= m.maintenance_limit)
+
+        const newStats: DashboardStats = {
+          totalOperators: operatorsRes.count || 0,
+          totalMachines: machinesRes.count || 0,
+          totalVehicles: vehiclesRes.count || 0,
+          activeJourneys: journeysRes.count || 0,
+          openServices: openServicesRes.count || 0,
+          finishedServicesToday: finishedServicesRes.count || 0,
+          maintenanceAlerts: alertMachines.length,
+          totalOvertimeToday: 0,
+        }
+        const services = (recentServicesRes.data || []) as ServiceOrder[]
+        const ops = (activeOpsRes.data || []) as (Journey & { operator: UserProfile })[]
+
+        setStats(newStats)
+        setRecentServices(services)
+        setMaintenanceAlerts(alertMachines)
+        setActiveOperators(ops)
+        setFromCache(false)
+
+        // Cache all data
+        setCacheData('dashboard', { key: CACHE_KEY_STATS }, [newStats]).catch(() => {})
+        setCacheData('dashboard', { key: CACHE_KEY_SERVICES }, services).catch(() => {})
+        setCacheData('dashboard', { key: CACHE_KEY_ALERTS }, alertMachines).catch(() => {})
+        setCacheData('dashboard', { key: CACHE_KEY_OPERATORS }, ops).catch(() => {})
+
+        setLoading(false)
+        return
+      } catch {
+        // Network error — fall through to cache
+      }
+    }
+
+    // Load from cache
+    const [cachedStats, cachedServices, cachedAlerts, cachedOps] = await Promise.all([
+      getCacheData('dashboard', { key: CACHE_KEY_STATS }),
+      getCacheData('dashboard', { key: CACHE_KEY_SERVICES }),
+      getCacheData('dashboard', { key: CACHE_KEY_ALERTS }),
+      getCacheData('dashboard', { key: CACHE_KEY_OPERATORS }),
+    ])
+
+    if (cachedStats && cachedStats.length > 0) setStats(cachedStats[0] as DashboardStats)
+    if (cachedServices) setRecentServices(cachedServices as ServiceOrder[])
+    if (cachedAlerts) setMaintenanceAlerts(cachedAlerts as Machine[])
+    if (cachedOps) setActiveOperators(cachedOps as (Journey & { operator: UserProfile })[])
+    setFromCache(true)
+    setLoading(false)
+  }, [supabase])
 
   useEffect(() => {
     loadDashboard()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
-  async function loadDashboard() {
-    const today = new Date().toISOString().split('T')[0]
-
-    const [
-      operatorsRes,
-      machinesRes,
-      vehiclesRes,
-      journeysRes,
-      openServicesRes,
-      finishedServicesRes,
-      recentServicesRes,
-      alertsRes,
-      activeOpsRes,
-    ] = await Promise.all([
-      supabase.from('users_profile').select('id', { count: 'exact' }).eq('role', 'operator'),
-      supabase.from('machines').select('id', { count: 'exact' }),
-      supabase.from('vehicles').select('id', { count: 'exact' }),
-      supabase.from('journeys').select('id', { count: 'exact' }).eq('date', today).is('garage_return_at', null),
-      supabase.from('service_orders').select('id', { count: 'exact' }).eq('status', 'open'),
-      supabase.from('service_orders').select('id', { count: 'exact' }).eq('date', today).eq('status', 'finished'),
-      supabase.from('service_orders').select('*, operator:users_profile(*), machine:machines(*), vehicle:vehicles(*)').order('created_at', { ascending: false }).limit(8),
-      supabase.from('machines').select('*').gte('hourmeter_current', 0),
-      supabase.from('journeys').select('*, operator:users_profile(*)').eq('date', today).is('garage_return_at', null).order('garage_out_at', { ascending: false }),
-    ])
-
-    const machinesList = (alertsRes.data || []) as Machine[]
-    const alertMachines = machinesList.filter(m => m.hourmeter_current >= m.maintenance_limit)
-
-    setStats({
-      totalOperators: operatorsRes.count || 0,
-      totalMachines: machinesRes.count || 0,
-      totalVehicles: vehiclesRes.count || 0,
-      activeJourneys: journeysRes.count || 0,
-      openServices: openServicesRes.count || 0,
-      finishedServicesToday: finishedServicesRes.count || 0,
-      maintenanceAlerts: alertMachines.length,
-      totalOvertimeToday: 0,
-    })
-    setRecentServices((recentServicesRes.data || []) as ServiceOrder[])
-    setMaintenanceAlerts(alertMachines)
-    setActiveOperators((activeOpsRes.data || []) as (Journey & { operator: UserProfile })[])
-    setLoading(false)
-  }
+    // Refresh when sync completes
+    const handleSync = () => loadDashboard()
+    window.addEventListener('ceres:data-synced', handleSync)
+    return () => window.removeEventListener('ceres:data-synced', handleSync)
+  }, [loadDashboard])
 
   if (loading) {
     return (
@@ -114,7 +165,14 @@ export default function DashboardPage() {
       <div className="page-header">
         <div>
           <h2>{greeting()}, {profile?.name?.split(' ')[0]} 👋</h2>
-          <p>Aqui está o resumo das operações de hoje — {formatDate(new Date().toISOString())}</p>
+          <p>
+            Aqui está o resumo das operações de hoje — {formatDate(new Date().toISOString())}
+            {fromCache && (
+              <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--color-accent-400)', fontWeight: 500 }}>
+                📦 Dados do cache
+              </span>
+            )}
+          </p>
         </div>
       </div>
 

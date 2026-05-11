@@ -1,10 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Machine } from '@/lib/types'
 import { getStatusClass, getStatusLabel, formatNumber } from '@/lib/utils'
+import { setCacheData, getCacheData } from '@/lib/offline-cache'
+import { cachedMutation } from '@/lib/cached-supabase'
 import { Cog, Plus, Search, X, Loader2, AlertTriangle } from 'lucide-react'
+
+const CACHE_KEY = 'machines-list'
 
 export default function MachinesPage() {
   const supabase = createClient()
@@ -13,6 +17,7 @@ export default function MachinesPage() {
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [fromCache, setFromCache] = useState(false)
   const [form, setForm] = useState({
     name: '',
     equipment_type: '',
@@ -22,29 +27,55 @@ export default function MachinesPage() {
     maintenance_limit: '250',
   })
 
-  useEffect(() => { loadMachines() }, [])
-
-  async function loadMachines() {
-    const { data } = await supabase.from('machines').select('*').order('name')
-    setMachines((data || []) as Machine[])
+  const loadMachines = useCallback(async () => {
+    if (navigator.onLine) {
+      try {
+        const { data } = await supabase.from('machines').select('*').order('name')
+        const list = (data || []) as Machine[]
+        setMachines(list)
+        setFromCache(false)
+        setCacheData('machines', { key: CACHE_KEY }, list).catch(() => {})
+        setLoading(false)
+        return
+      } catch { /* fallback to cache */ }
+    }
+    const cached = await getCacheData('machines', { key: CACHE_KEY })
+    if (cached) { setMachines(cached as Machine[]); setFromCache(true) }
     setLoading(false)
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadMachines()
+    const handleSync = () => loadMachines()
+    window.addEventListener('ceres:data-synced', handleSync)
+    return () => window.removeEventListener('ceres:data-synced', handleSync)
+  }, [loadMachines])
 
   async function handleCreate() {
     setSaving(true)
-    const { error } = await supabase.from('machines').insert({
-      name: form.name,
-      equipment_type: form.equipment_type,
-      model: form.model,
-      color: form.color || null,
-      internal_number: form.internal_number,
-      maintenance_limit: parseFloat(form.maintenance_limit) || 250,
+    const result = await cachedMutation({
+      table: 'machines',
+      operation: 'insert',
+      payload: {
+        name: form.name,
+        equipment_type: form.equipment_type,
+        model: form.model,
+        color: form.color || null,
+        internal_number: form.internal_number,
+        maintenance_limit: parseFloat(form.maintenance_limit) || 250,
+      },
     })
-    if (error) {
-      alert('Erro: ' + error.message)
+
+    if (!result.success) {
+      alert('Erro: ' + result.error)
       setSaving(false)
       return
     }
+
+    if (result.queued) {
+      alert('✅ Máquina salva localmente. Será sincronizada quando houver internet.')
+    }
+
     await loadMachines()
     setShowModal(false)
     setSaving(false)
@@ -64,7 +95,10 @@ export default function MachinesPage() {
       <div className="page-header">
         <div>
           <h2>Máquinas</h2>
-          <p>Cadastro e controle de máquinas e equipamentos</p>
+          <p>
+            Cadastro e controle de máquinas e equipamentos
+            {fromCache && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--color-accent-400)', fontWeight: 500 }}>📦 Cache</span>}
+          </p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)} id="btn-add-machine">
           <Plus size={18} /> Nova Máquina
