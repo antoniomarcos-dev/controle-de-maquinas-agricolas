@@ -25,9 +25,8 @@ const MAX_RETRIES = 5
 export function useSyncManager() {
   const { status, setStatus, refreshPendingCount } = useConnectivity()
   const syncing = useRef(false)
-  const supabase = createClient()
-
   const syncAll = useCallback(async () => {
+    const supabase = createClient()
     if (syncing.current) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) return
 
@@ -108,7 +107,7 @@ export function useSyncManager() {
     } finally {
       syncing.current = false
     }
-  }, [supabase, setStatus, refreshPendingCount])
+  }, [setStatus, refreshPendingCount])
 
   useEffect(() => {
     // Listen for sync requests (triggered when coming back online)
@@ -118,10 +117,8 @@ export function useSyncManager() {
 
     window.addEventListener('ceres:sync-requested', handleSyncRequest)
 
-    // Auto-sync on mount if online and there are pending mutations
-    if (status === 'online') {
-      syncAll()
-    }
+    // Auto-sync on mount
+    syncAll()
 
     // Periodic sync attempt every 30 seconds
     const interval = setInterval(() => {
@@ -134,7 +131,7 @@ export function useSyncManager() {
       window.removeEventListener('ceres:sync-requested', handleSyncRequest)
       clearInterval(interval)
     }
-  }, [syncAll, status])
+  }, [syncAll])
 
   return { syncAll }
 }
